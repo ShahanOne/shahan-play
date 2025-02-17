@@ -6,9 +6,9 @@ const port = process.env.PORT || 3000;
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
 const botToken = process.env.SLACK_BOT_TOKEN;
 
-console.log('PORT:', process.env.PORT);
-console.log('SLACK_SIGNING_SECRET set:', !!signingSecret);
-console.log('SLACK_BOT_TOKEN set:', !!botToken);
+// console.log('PORT:', process.env.PORT);
+// console.log('SLACK_SIGNING_SECRET set:', !!signingSecret);
+// console.log('SLACK_BOT_TOKEN set:', !!botToken);
 
 if (!signingSecret || !botToken) {
   console.error('❌ Missing environment variables!');
@@ -27,9 +27,11 @@ const app = new App({
 
     app.message('quote', async ({ message, say }) => {
       try {
-        const response = await axios.get('https://api.quotable.io/random');
-        const quote = response.data.content;
-        const author = response.data.author;
+        const response = await fetch('https://api.quotable.io/random')
+          .then((res) => res.json())
+          .then((data) => data);
+        const quote = response.content;
+        const author = response.author;
         await say(
           `Hi <@${message.user}>, here is a quote for you: "${quote}" - ${author}`
         );
