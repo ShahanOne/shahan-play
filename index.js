@@ -1,5 +1,4 @@
 require('dotenv').config();
-const axios = require('axios');
 const { App } = require('@slack/bolt');
 
 const port = process.env.PORT || 3000;
@@ -27,11 +26,10 @@ const app = new App({
 
     app.message('quote', async ({ message, say }) => {
       try {
-        const response = await fetch('https://api.quotable.io/random')
-          .then((res) => res.json())
-          .then((data) => data);
-        const quote = response.content;
-        const author = response.author;
+        const response = await fetch('https://zenquotes.io/api/random');
+        const data = await response.json();
+        const quote = data[0].q;
+        const author = data[0].a;
         await say(
           `Hi <@${message.user}>, here is a quote for you: "${quote}" - ${author}`
         );
