@@ -1,4 +1,3 @@
-require('dotenv').config();
 const axios = require('axios');
 const { App } = require('@slack/bolt');
 
@@ -12,7 +11,7 @@ if (!signingSecret || !botToken) {
 }
 
 const app = new App({
-  signingSecret: signingSecret,
+  signingSecret,
   token: botToken,
 });
 
@@ -27,12 +26,12 @@ const app = new App({
         const quote = response.data.content;
         const author = response.data.author;
         await say(
-          `Hi <@${message.user}>, here’s a quote for you: "${quote}" - ${author}`
+          `Hi <@${message.user}>, here is a quote for you: "${quote}" - ${author}`
         );
       } catch (error) {
         console.error('Error fetching quote:', error);
         await say(
-          'Sorry, I couldn’t fetch a quote at the moment. Try again later!'
+          'Sorry, I could not fetch a quote at the moment. Try again later!'
         );
       }
     });
