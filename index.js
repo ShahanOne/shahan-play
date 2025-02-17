@@ -1,9 +1,14 @@
+require('dotenv').config();
 const axios = require('axios');
 const { App } = require('@slack/bolt');
 
-const port = process.env.PORT || 4000;
+const port = process.env.PORT || 3000;
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
 const botToken = process.env.SLACK_BOT_TOKEN;
+
+console.log('PORT:', process.env.PORT);
+console.log('SLACK_SIGNING_SECRET set:', !!signingSecret);
+console.log('SLACK_BOT_TOKEN set:', !!botToken);
 
 if (!signingSecret || !botToken) {
   console.error('❌ Missing environment variables!');
