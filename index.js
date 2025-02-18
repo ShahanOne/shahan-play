@@ -61,8 +61,12 @@ const app = new App({
             const imageUrl = data.urls.regular;
             await say({
               text: `Here is some inspiration for you, <@${message.user}>!`,
-              attachments: [
-                { image_url: imageUrl, alt_text: 'Inspirational Image' },
+              blocks: [
+                {
+                  type: 'image',
+                  image_url: imageUrl,
+                  alt_text: 'Inspirational Image',
+                },
               ],
             });
           } else {
