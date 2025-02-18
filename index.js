@@ -24,15 +24,20 @@ const app = new App({
     await app.start(port);
     console.log(`⚡️ Bolt app is running on port ${port}!`);
 
-    app.message('quote', async ({ message, say }) => {
+    app.message(async ({ message, say }) => {
       try {
-        const response = await fetch('https://zenquotes.io/api/random');
-        const data = await response.json();
-        const quote = data[0].q;
-        const author = data[0].a;
-        await say(
-          `Hi <@${message.user}>, here is a quote for you: "${quote}" - ${author}`
-        );
+        if (
+          message.text.includes(`<@${process.env.BOT_USER_ID}> quote`) ||
+          message.text.includes('quote')
+        ) {
+          const response = await fetch('https://zenquotes.io/api/random');
+          const data = await response.json();
+          const quote = data[0].q;
+          const author = data[0].a;
+          await say(
+            `Hi <@${message.user}>, here is a quote for you: "${quote}" - ${author}`
+          );
+        }
       } catch (error) {
         console.error('Error fetching quote:', error);
         await say(
