@@ -60,8 +60,15 @@ const app = new App({
           if (data.urls) {
             const imageUrl = data.urls.regular;
             await say({
-              text: `Here is some inspiration for you, <@${message.user}>!`,
+              //   text: `Here is some inspiration for you, <@${message.user}>!`,
               blocks: [
+                {
+                  type: 'section',
+                  text: {
+                    type: 'mrkdwn',
+                    text: `Here is some inspiration for you, <@${message.user}>!`,
+                  },
+                },
                 {
                   type: 'image',
                   image_url: imageUrl,
