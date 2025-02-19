@@ -53,6 +53,10 @@ async function getChatGPTResponse(userMessage) {
 
         if (text.includes(`@gpt`)) {
           const userMessage = text.replace(`@gpt`, '').trim();
+          if (!userMessage) {
+            await say(`⚠️ Please provide a message after mentioning me.`);
+            return;
+          }
 
           if (userMessage) {
             await say(`🤖 Thinking...`);
@@ -72,11 +76,11 @@ async function getChatGPTResponse(userMessage) {
             `Hi <@${message.user}>, here is a quote for you:\n"${quote}" - ${author}`
           );
         } else if (
-          text.includes(`<@${botUserId}> inspire me`) ||
-          text.includes('inspire me')
+          text.includes(`<@${botUserId}> amaze me`) ||
+          text.includes('amaze me')
         ) {
           const response = await fetch(
-            `https://api.unsplash.com/photos/random?query=inspiration&client_id=${unsplashAccessKey}`
+            `https://api.unsplash.com/photos/random?query=amazing&client_id=${unsplashAccessKey}`
           );
           const data = await response.json();
 
