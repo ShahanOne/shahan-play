@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { App } = require('@slack/bolt');
+const OpenAI = require('openai');
 const cron = require('node-cron');
 
 const port = process.env.PORT || 3000;
@@ -8,6 +9,7 @@ const botToken = process.env.SLACK_BOT_TOKEN;
 const botUserId = process.env.BOT_USER_ID;
 const unsplashAccessKey = process.env.UNSPLASH_ACCESS_KEY;
 const allChannelId = 'C08DMHC68N6';
+const openaiApiKey = process.env.OPENAI_API_KEY;
 
 if (!signingSecret || !botToken) {
   console.error('❌ Missing environment variables!');
@@ -19,6 +21,26 @@ const app = new App({
   token: botToken,
 });
 
+const openai = new OpenAI({
+  apiKey: openaiApiKey,
+});
+
+// Function to interact with OpenAI API
+async function getChatGPTResponse(userMessage) {
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: userMessage }],
+      temperature: 0.7,
+    });
+
+    return response.choices[0].message.content;
+  } catch (error) {
+    console.error('Error with OpenAI API:', error);
+    return "Sorry, I couldn't process that request.";
+  }
+}
+
 (async () => {
   try {
     await app.start(port);
@@ -29,7 +51,18 @@ const app = new App({
       try {
         const text = message.text.toLowerCase();
 
-        if (text.includes(`<@${botUserId}> quote`) || text.includes('quote')) {
+        if (text.includes(`@gpt`)) {
+          const userMessage = text.replace(`@gpt`, '').trim();
+
+          if (userMessage) {
+            await say(`🤖 Thinking...`);
+            const chatGPTResponse = await getChatGPTResponse(userMessage);
+            await say(`💬 ${chatGPTResponse}`);
+          }
+        } else if (
+          text.includes(`<@${botUserId}> quote`) ||
+          text.includes('quote')
+        ) {
           const response = await fetch('https://zenquotes.io/api/random');
           const data = await response.json();
           const quote = data[0].q;
