@@ -23,6 +23,7 @@ const app = new App({
 
 const openai = new OpenAI({
   apiKey: openaiApiKey,
+  project: 'proj_yCMfNl7qc4HPio6KtPqdgHJj',
 });
 
 // Function to interact with OpenAI API
@@ -32,6 +33,7 @@ async function getChatGPTResponse(userMessage) {
       model: 'gpt-3.5-turbo',
       messages: [{ role: 'user', content: userMessage }],
       temperature: 0.7,
+      max_tokens: 50,
     });
 
     return response.choices[0].message.content;
@@ -87,18 +89,19 @@ async function getChatGPTResponse(userMessage) {
           if (data.urls) {
             const imageUrl = data.urls.regular;
             await say({
+              text: `Here is something amazing for you, <@${message.user}>!`,
               blocks: [
                 {
                   type: 'section',
                   text: {
                     type: 'mrkdwn',
-                    text: `Here is some inspiration for you, <@${message.user}>!`,
+                    text: `Here is something amazing for you, <@${message.user}>!`,
                   },
                 },
                 {
                   type: 'image',
                   image_url: imageUrl,
-                  alt_text: 'Inspirational Image',
+                  alt_text: 'amazing Image',
                 },
               ],
             });
