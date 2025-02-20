@@ -51,7 +51,7 @@ const app = new App({
 
 async function getAIResponse(userMessage) {
   const response = await fetch(
-    'https://api-inference.huggingface.co/models/gpt2',
+    'https://api-inference.huggingface.co/models/openai-community/gpt2',
     {
       method: 'POST',
       headers: {
@@ -63,7 +63,7 @@ async function getAIResponse(userMessage) {
   );
 
   const data = await response.json();
-  return data.generated_text || "Sorry, I couldn't generate a response.";
+  return data || "Sorry, I couldn't generate a response.";
 }
 
 (async () => {
