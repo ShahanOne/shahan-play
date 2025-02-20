@@ -57,14 +57,14 @@ const app = new App({
 
 async function getAIResponse(userMessage) {
   const chatCompletion = await client.chatCompletion({
-    model: 'deepseek-ai/DeepSeek-V3',
+    model: 'meta-llama/Llama-3.2-3B-Instruct',
     messages: [
       {
         role: 'user',
         content: userMessage,
       },
     ],
-    provider: 'nebius',
+    provider: 'hf-inference',
     max_tokens: 100,
   });
 
