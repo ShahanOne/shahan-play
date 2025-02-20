@@ -2,7 +2,7 @@ require('dotenv').config();
 const { App } = require('@slack/bolt');
 // const OpenAI = require('openai');
 const cron = require('node-cron');
-import { HfInference } from '@huggingface/inference';
+const { HfInference } = require('@huggingface/inference');
 
 const port = process.env.PORT || 3000;
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
