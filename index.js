@@ -11,13 +11,11 @@ const unsplashAccessKey = process.env.UNSPLASH_ACCESS_KEY;
 const allChannelId = 'C08DMHC68N6';
 // const openaiApiKey = process.env.OPENAI_API_KEY;
 const hfApiKey = process.env.HF_API_KEY;
-if (
-  !signingSecret ||
-  !botToken ||
-  !botUserId ||
-  !unsplashAccessKey ||
-  !hfApiKey
-) {
+if (!hfApiKey) {
+  console.error('❌ Missing environment nigga!');
+  process.exit(1);
+}
+if (!signingSecret || !botToken || !botUserId || !unsplashAccessKey) {
   console.error('❌ Missing environment variables!');
   process.exit(1);
 }
