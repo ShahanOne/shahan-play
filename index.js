@@ -2,6 +2,7 @@ require('dotenv').config();
 const { App } = require('@slack/bolt');
 // const OpenAI = require('openai');
 const cron = require('node-cron');
+import { HfInference } from '@huggingface/inference';
 
 const port = process.env.PORT || 3000;
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
@@ -11,6 +12,8 @@ const unsplashAccessKey = process.env.UNSPLASH_ACCESS_KEY;
 const allChannelId = 'C08DMHC68N6';
 // const openaiApiKey = process.env.OPENAI_API_KEY;
 const hfApiKey = process.env.HF_API_KEY;
+
+const client = new HfInference(hfApiKey);
 
 if (
   !signingSecret ||
@@ -53,21 +56,21 @@ const app = new App({
 // }
 
 async function getAIResponse(userMessage) {
-  const response = await fetch(
-    'https://api-inference.huggingface.co/models/openai-community/gpt2',
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${hfApiKey}`,
-        'Content-Type': 'application/json',
+  const chatCompletion = await client.chatCompletion({
+    model: 'deepseek-ai/DeepSeek-V3',
+    messages: [
+      {
+        role: 'user',
+        content: userMessage,
       },
-      body: JSON.stringify({ inputs: userMessage }),
-    }
-  );
+    ],
+    provider: 'nebius',
+    max_tokens: 100,
+  });
 
-  const data = await response.json();
-  console.log(data);
-  return data || "Sorry, I couldn't generate a response.";
+  const reply = chatCompletion.choices[0].message;
+  console.log(reply);
+  return reply || "Sorry, I couldn't generate a response.";
 }
 
 (async () => {
