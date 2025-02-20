@@ -11,7 +11,13 @@ const unsplashAccessKey = process.env.UNSPLASH_ACCESS_KEY;
 const allChannelId = 'C08DMHC68N6';
 const openaiApiKey = process.env.OPENAI_API_KEY;
 
-if (!signingSecret || !botToken) {
+if (
+  !signingSecret ||
+  !botToken ||
+  !botUserId ||
+  !unsplashAccessKey ||
+  !openaiApiKey
+) {
   console.error('❌ Missing environment variables!');
   process.exit(1);
 }
@@ -23,7 +29,6 @@ const app = new App({
 
 const openai = new OpenAI({
   apiKey: openaiApiKey,
-  project: 'proj_yCMfNl7qc4HPio6KtPqdgHJj',
 });
 
 // Function to interact with OpenAI API
@@ -31,9 +36,12 @@ async function getChatGPTResponse(userMessage) {
   try {
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: userMessage }],
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: userMessage },
+      ],
       temperature: 0.7,
-      max_tokens: 50,
+      max_tokens: 100,
     });
 
     return response.choices[0].message.content;
