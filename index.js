@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { App } = require('@slack/bolt');
-const OpenAI = require('openai');
+// const OpenAI = require('openai');
 const cron = require('node-cron');
 
 const port = process.env.PORT || 3000;
@@ -9,14 +9,14 @@ const botToken = process.env.SLACK_BOT_TOKEN;
 const botUserId = process.env.BOT_USER_ID;
 const unsplashAccessKey = process.env.UNSPLASH_ACCESS_KEY;
 const allChannelId = 'C08DMHC68N6';
-const openaiApiKey = process.env.OPENAI_API_KEY;
-
+// const openaiApiKey = process.env.OPENAI_API_KEY;
+const hfApiKey = process.env.HF_API_KEY;
 if (
   !signingSecret ||
   !botToken ||
   !botUserId ||
   !unsplashAccessKey ||
-  !openaiApiKey
+  !hfApiKey
 ) {
   console.error('❌ Missing environment variables!');
   process.exit(1);
@@ -27,28 +27,45 @@ const app = new App({
   token: botToken,
 });
 
-const openai = new OpenAI({
-  apiKey: openaiApiKey,
-});
+// const openai = new OpenAI({
+//   apiKey: openaiApiKey,
+// });
 
 // Function to interact with OpenAI API
-async function getChatGPTResponse(userMessage) {
-  try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        { role: 'system', content: 'You are a helpful assistant.' },
-        { role: 'user', content: userMessage },
-      ],
-      temperature: 0.7,
-      max_tokens: 100,
-    });
+// async function getChatGPTResponse(userMessage) {
+//   try {
+//     const response = await openai.chat.completions.create({
+//       model: 'gpt-3.5-turbo',
+//       messages: [
+//         { role: 'system', content: 'You are a helpful assistant.' },
+//         { role: 'user', content: userMessage },
+//       ],
+//       temperature: 0.7,
+//       max_tokens: 100,
+//     });
 
-    return response.choices[0].message.content;
-  } catch (error) {
-    console.error('Error with OpenAI API:', error);
-    return "Sorry, I couldn't process that request.";
-  }
+//     return response.choices[0].message.content;
+//   } catch (error) {
+//     console.error('Error with OpenAI API:', error);
+//     return "Sorry, I couldn't process that request.";
+//   }
+// }
+
+async function getAIResponse(userMessage) {
+  const response = await fetch(
+    'https://api-inference.huggingface.co/models/gpt2',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${hfApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ inputs: userMessage }),
+    }
+  );
+
+  const data = await response.json();
+  return data.generated_text || "Sorry, I couldn't generate a response.";
 }
 
 (async () => {
@@ -61,8 +78,8 @@ async function getChatGPTResponse(userMessage) {
       try {
         const text = message.text.toLowerCase();
 
-        if (text.includes(`@gpt`)) {
-          const userMessage = text.replace(`@gpt`, '').trim();
+        if (text.includes(`@ai`)) {
+          const userMessage = text.replace(`@ai`, '').trim();
           if (!userMessage) {
             await say(`⚠️ Please provide a message after mentioning me.`);
             return;
@@ -70,8 +87,8 @@ async function getChatGPTResponse(userMessage) {
 
           if (userMessage) {
             await say(`🤖 Thinking...`);
-            const chatGPTResponse = await getChatGPTResponse(userMessage);
-            await say(`💬 ${chatGPTResponse}`);
+            const aiResponse = await getAIResponse(userMessage);
+            await say(`💬 ${aiResponse}`);
           }
         } else if (
           text.includes(`<@${botUserId}> quote`) ||
