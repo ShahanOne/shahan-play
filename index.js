@@ -175,11 +175,12 @@ const app = new App({
     app.view('modal_submission', async ({ ack, body, view, client }) => {
       await ack(); // Acknowledge the modal submission
 
-      const userInput = view.state.values.user_input.input_value.value;
+      const userInput = view.state.values.user_input;
       const userId = body.user.id;
 
       await client.chat.postMessage({
-        channel: userId, // Send a DM to the user
+        channel: 'C08DMHC68N6',
+        // channel: userId, // Send a DM to the user
         text: `You submitted: "${userInput}"`,
       });
     });
