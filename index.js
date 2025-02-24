@@ -82,43 +82,7 @@ const app = new App({
     app.message(async ({ message, say }) => {
       try {
         const text = message.text.toLowerCase();
-
-        //modal
-        if (text.includes(`open modal`)) {
-          await app.client.views.open({
-            trigger_id: message.ts, // Slack requires a trigger_id
-            token: botToken,
-            view: {
-              type: 'modal',
-              callback_id: 'modal_submission',
-              title: {
-                type: 'plain_text',
-                text: 'My Modal',
-              },
-              blocks: [
-                {
-                  type: 'input',
-                  block_id: 'user_input',
-                  label: {
-                    type: 'plain_text',
-                    text: 'Enter something:',
-                  },
-                  element: {
-                    type: 'plain_text_input',
-                    action_id: 'input_value',
-                  },
-                },
-              ],
-              submit: {
-                type: 'plain_text',
-                text: 'Submit',
-              },
-            },
-          });
-
-          await say(`Opening a modal for you, <@${message.user}>...`);
-          //messages
-        } else if (text.includes(`@ai`)) {
+        if (text.includes(`@ai`)) {
           const userMessage = text.replace(`@ai`, '').trim();
           if (!userMessage) {
             await say(`⚠️ Please provide a message after mentioning me.`);
@@ -178,6 +142,32 @@ const app = new App({
       } catch (error) {
         console.error('Error handling message:', error);
         await say('Oops! Something went wrong.');
+      }
+    });
+
+    app.command('/openmodal', async ({ command, ack, client }) => {
+      await ack(); // ✅ Acknowledge the command
+
+      try {
+        await client.views.open({
+          trigger_id: command.trigger_id, // ✅ Correct trigger_id from the command
+          view: {
+            type: 'modal',
+            callback_id: 'modal_submission',
+            title: { type: 'plain_text', text: 'My Modal' },
+            blocks: [
+              {
+                type: 'input',
+                block_id: 'user_input',
+                label: { type: 'plain_text', text: 'Enter something:' },
+                element: { type: 'plain_text_input', action_id: 'input_value' },
+              },
+            ],
+            submit: { type: 'plain_text', text: 'Submit' },
+          },
+        });
+      } catch (error) {
+        console.error('Error opening modal:', error);
       }
     });
 
