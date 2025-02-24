@@ -12,6 +12,7 @@
   "dependencies": {
     "@huggingface/inference": "^3.3.5",
     "@slack/bolt": "^4.2.0",
+    "axios": "^1.7.9",
     "dotenv": "^16.4.7",
     "node-cron": "^3.0.3",
     "openai": "^4.85.2"

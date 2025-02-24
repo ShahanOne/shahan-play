@@ -2,7 +2,7 @@ require('dotenv').config();
 const { App } = require('@slack/bolt');
 // const OpenAI = require('openai');
 const cron = require('node-cron');
-const { HfInference } = require('@huggingface/inference');
+// const { HfInference } = require('@huggingface/inference');
 
 const port = process.env.PORT || 3000;
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
@@ -13,7 +13,7 @@ const allChannelId = 'C08DMHC68N6';
 // const openaiApiKey = process.env.OPENAI_API_KEY;
 const hfApiKey = process.env.HF_API_KEY;
 
-const client = new HfInference(hfApiKey);
+// const client = new HfInference(hfApiKey);
 
 if (
   !signingSecret ||
@@ -55,23 +55,23 @@ const app = new App({
 //   }
 // }
 
-async function getAIResponse(userMessage) {
-  const chatCompletion = await client.chatCompletion({
-    model: 'meta-llama/Llama-3.2-3B-Instruct',
-    messages: [
-      {
-        role: 'user',
-        content: userMessage,
-      },
-    ],
-    provider: 'hf-inference',
-    max_tokens: 100,
-  });
+// async function getAIResponse(userMessage) {
+//   const chatCompletion = await client.chatCompletion({
+//     model: 'meta-llama/Llama-3.2-3B-Instruct',
+//     messages: [
+//       {
+//         role: 'user',
+//         content: userMessage,
+//       },
+//     ],
+//     provider: 'hf-inference',
+//     max_tokens: 100,
+//   });
 
-  const reply = chatCompletion.choices[0].message;
-  console.log(reply);
-  return reply || "Sorry, I couldn't generate a response.";
-}
+//   const reply = chatCompletion.choices[0].message;
+//   console.log(reply);
+//   return reply || "Sorry, I couldn't generate a response.";
+// }
 
 (async () => {
   try {
@@ -83,7 +83,42 @@ async function getAIResponse(userMessage) {
       try {
         const text = message.text.toLowerCase();
 
-        if (text.includes(`@ai`)) {
+        //modal
+        if (text.includes(`open modal`)) {
+          await app.client.views.open({
+            trigger_id: message.ts, // Slack requires a trigger_id
+            token: botToken,
+            view: {
+              type: 'modal',
+              callback_id: 'modal_submission',
+              title: {
+                type: 'plain_text',
+                text: 'My Modal',
+              },
+              blocks: [
+                {
+                  type: 'input',
+                  block_id: 'user_input',
+                  label: {
+                    type: 'plain_text',
+                    text: 'Enter something:',
+                  },
+                  element: {
+                    type: 'plain_text_input',
+                    action_id: 'input_value',
+                  },
+                },
+              ],
+              submit: {
+                type: 'plain_text',
+                text: 'Submit',
+              },
+            },
+          });
+
+          await say(`Opening a modal for you, <@${message.user}>...`);
+          //messages
+        } else if (text.includes(`@ai`)) {
           const userMessage = text.replace(`@ai`, '').trim();
           if (!userMessage) {
             await say(`⚠️ Please provide a message after mentioning me.`);
@@ -92,8 +127,9 @@ async function getAIResponse(userMessage) {
 
           if (userMessage) {
             await say(`🤖 Thinking...`);
-            const aiResponse = await getAIResponse(userMessage);
-            await say(`💬 ${aiResponse}`);
+            // const aiResponse = await getAIResponse(userMessage);
+            // await say(`💬 ${aiResponse}`);
+            await say(`💬 AI not available at the moment`);
           }
         } else if (
           text.includes(`<@${botUserId}> quote`) ||
@@ -143,6 +179,19 @@ async function getAIResponse(userMessage) {
         console.error('Error handling message:', error);
         await say('Oops! Something went wrong.');
       }
+    });
+
+    // 🔹 Handle Modal Submission
+    app.view('modal_submission', async ({ ack, body, view, client }) => {
+      await ack(); // Acknowledge the modal submission
+
+      const userInput = view.state.values.user_input.input_value.value;
+      const userId = body.user.id;
+
+      await client.chat.postMessage({
+        channel: userId, // Send a DM to the user
+        text: `You submitted: "${userInput}"`,
+      });
     });
 
     // Scheduled Daily Quote
