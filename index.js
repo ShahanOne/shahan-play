@@ -171,11 +171,84 @@ const app = new App({
       }
     });
 
+    // Listen for the "app_home_opened" event when users open your bot
+    app.event('app_home_opened', async ({ event, client }) => {
+      try {
+        await client.views.publish({
+          user_id: event.user,
+          view: {
+            type: 'home',
+            callback_id: 'home_view',
+            blocks: [
+              {
+                type: 'section',
+                text: {
+                  type: 'mrkdwn',
+                  text: '*Welcome to the bot!* 🚀\nChoose an action below:',
+                },
+              },
+              {
+                type: 'actions',
+                elements: [
+                  {
+                    type: 'button',
+                    text: { type: 'plain_text', text: 'Show Message' },
+                    action_id: 'show_message',
+                  },
+                  {
+                    type: 'button',
+                    text: { type: 'plain_text', text: 'Open Modal' },
+                    action_id: 'open_modal',
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      } catch (error) {
+        console.error('Error publishing home tab:', error);
+      }
+    });
+
+    // Handle "Show Message" button click
+    app.action('show_message', async ({ ack, body, client }) => {
+      await ack(); // Acknowledge button click
+
+      const userId = body.user.id;
+      await client.chat.postMessage({
+        channel: userId,
+        text: `🎉 You clicked the "Show Message" button!`,
+      });
+    });
+
+    // Handle "Open Modal" button click
+    app.action('open_modal', async ({ ack, body, client }) => {
+      await ack();
+
+      await client.views.open({
+        trigger_id: body.trigger_id,
+        view: {
+          type: 'modal',
+          callback_id: 'modal_submission',
+          title: { type: 'plain_text', text: 'My Modal' },
+          blocks: [
+            {
+              type: 'input',
+              block_id: 'user_input',
+              label: { type: 'plain_text', text: 'Enter something:' },
+              element: { type: 'plain_text_input', action_id: 'input_value' },
+            },
+          ],
+          submit: { type: 'plain_text', text: 'Submit' },
+        },
+      });
+    });
+
     // 🔹 Handle Modal Submission
     app.view('modal_submission', async ({ ack, body, view, client }) => {
       await ack(); // Acknowledge the modal submission
 
-      const userInput = view.state.values.user_input;
+      const userInput = view.state.values.user_input.input_value.value;
       const userId = body.user.id;
 
       await client.chat.postMessage({
