@@ -1,9 +1,11 @@
 require('dotenv').config();
 const { App } = require('@slack/bolt');
-// const OpenAI = require('openai');
 const cron = require('node-cron');
+// const OpenAI = require('openai');
 // const { HfInference } = require('@huggingface/inference');
-const nodemailer = require('nodemailer');
+const Imap = require('imap-simple');
+const { simpleParser } = require('mailparser');
+
 const { openModal } = require('./random/commands/openmodal');
 const { sendMail } = require('./mail/commands/sendmail');
 const { sendEmailModal } = require('./mail/views/sendEmailModal');
@@ -37,24 +39,52 @@ const app = new App({
   token: botToken,
 });
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER, // Your Gmail email
-    pass: process.env.EMAIL_PASS, // App Password (not your Gmail password)
+//receiving mail
+const imapConfig = {
+  imap: {
+    user: process.env.EMAIL_USER,
+    password: process.env.EMAIL_PASS,
+    host: process.env.EMAIL_HOST,
+    port: process.env.EMAIL_PORT,
+    tls: true,
+    tlsOptions: { rejectUnauthorized: false },
+    authTimeout: 3000,
   },
-});
+};
 
-async function sendEmail(to, message) {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to,
-    subject: 'Message from Slack Bot',
-    text: message,
-  };
+async function checkEmails() {
+  try {
+    const connection = await Imap.connect(imapConfig);
+    await connection.openBox('INBOX');
 
-  return transporter.sendMail(mailOptions);
+    const searchCriteria = ['UNSEEN']; // Fetch unread emails
+    const fetchOptions = { bodies: ['HEADER', 'TEXT'], markSeen: true };
+
+    const messages = await connection.search(searchCriteria, fetchOptions);
+    for (const message of messages) {
+      const header = message.parts.find((part) => part.which === 'HEADER');
+      const body = message.parts.find((part) => part.which === 'TEXT');
+
+      const parsed = await simpleParser(body.body);
+      const subject = header.body.subject[0];
+      const sender = parsed.from.text;
+      const textBody = parsed.text || 'No body content';
+
+      // Send email to Slack
+      await app.client.chat.postMessage({
+        channel: 'your-slack-channel-id',
+        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n${textBody}`,
+      });
+    }
+
+    await connection.end();
+  } catch (error) {
+    console.error('Error fetching emails:', error);
+  }
 }
+
+// Check emails every minute
+setInterval(checkEmails, 60000);
 
 (async () => {
   try {

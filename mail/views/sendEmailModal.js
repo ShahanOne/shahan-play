@@ -1,3 +1,25 @@
+const nodemailer = require('nodemailer');
+
+//sending mail
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER, // Your Gmail email
+    pass: process.env.EMAIL_PASS, // App Password (not your Gmail password)
+  },
+});
+
+async function sendEmail(to, message) {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to,
+    subject: 'Message from Slack Bot',
+    text: message,
+  };
+
+  return transporter.sendMail(mailOptions);
+}
+
 const sendEmailModal = async ({ ack, body, view, client }) => {
   await ack(); // Acknowledge the submission
 
