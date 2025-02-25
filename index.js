@@ -48,7 +48,7 @@ const imapConfig = {
     port: process.env.EMAIL_PORT,
     tls: true,
     tlsOptions: { rejectUnauthorized: false },
-    authTimeout: 3000,
+    authTimeout: 10000,
   },
 };
 
@@ -66,8 +66,10 @@ async function checkEmails() {
       const body = message.parts.find((part) => part.which === 'TEXT');
 
       const parsed = await simpleParser(body.body);
-      const subject = header.body.subject[0];
-      const sender = parsed.from.text;
+      const subject = header.body.subject
+        ? header.body.subject[0]
+        : 'No Subject';
+      const sender = parsed.from?.text || 'Unknown sender';
       const textBody = parsed.text || 'No body content';
 
       // Send email to Slack
