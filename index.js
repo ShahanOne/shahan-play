@@ -3,6 +3,7 @@ const { App } = require('@slack/bolt');
 // const OpenAI = require('openai');
 const cron = require('node-cron');
 // const { HfInference } = require('@huggingface/inference');
+const nodemailer = require('nodemailer');
 
 const port = process.env.PORT || 3000;
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
@@ -31,49 +32,24 @@ const app = new App({
   token: botToken,
 });
 
-//check
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER, // Your Gmail email
+    pass: process.env.EMAIL_PASS, // App Password (not your Gmail password)
+  },
+});
 
-// const openai = new OpenAI({
-//   apiKey: openaiApiKey,
-// });
+async function sendEmail(to, message) {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to,
+    subject: 'Message from Slack Bot',
+    text: message,
+  };
 
-// Function to interact with OpenAI API
-// async function getChatGPTResponse(userMessage) {
-//   try {
-//     const response = await openai.chat.completions.create({
-//       model: 'gpt-3.5-turbo',
-//       messages: [
-//         { role: 'system', content: 'You are a helpful assistant.' },
-//         { role: 'user', content: userMessage },
-//       ],
-//       temperature: 0.7,
-//       max_tokens: 100,
-//     });
-
-//     return response.choices[0].message.content;
-//   } catch (error) {
-//     console.error('Error with OpenAI API:', error);
-//     return "Sorry, I couldn't process that request.";
-//   }
-// }
-
-// async function getAIResponse(userMessage) {
-//   const chatCompletion = await client.chatCompletion({
-//     model: 'meta-llama/Llama-3.2-3B-Instruct',
-//     messages: [
-//       {
-//         role: 'user',
-//         content: userMessage,
-//       },
-//     ],
-//     provider: 'hf-inference',
-//     max_tokens: 100,
-//   });
-
-//   const reply = chatCompletion.choices[0].message;
-//   console.log(reply);
-//   return reply || "Sorry, I couldn't generate a response.";
-// }
+  return transporter.sendMail(mailOptions);
+}
 
 (async () => {
   try {
@@ -147,6 +123,77 @@ const app = new App({
       }
     });
 
+    //mail
+    app.command('/sendmail', async ({ command, ack, client }) => {
+      await ack();
+
+      try {
+        await client.views.open({
+          trigger_id: command.trigger_id,
+          view: {
+            type: 'modal',
+            callback_id: 'send_email_modal',
+            title: { type: 'plain_text', text: 'Send an Email' },
+            blocks: [
+              {
+                type: 'input',
+                block_id: 'email_input',
+                label: { type: 'plain_text', text: 'Recipient Email' },
+                element: {
+                  type: 'plain_text_input',
+                  action_id: 'email',
+                  placeholder: { type: 'plain_text', text: 'Enter email' },
+                },
+              },
+              {
+                type: 'input',
+                block_id: 'message_input',
+                label: { type: 'plain_text', text: 'Message' },
+                element: {
+                  type: 'plain_text_input',
+                  action_id: 'message',
+                  multiline: true,
+                  placeholder: {
+                    type: 'plain_text',
+                    text: 'Enter your message',
+                  },
+                },
+              },
+            ],
+            submit: { type: 'plain_text', text: 'Send' },
+          },
+        });
+      } catch (error) {
+        console.error('Error opening email modal:', error);
+      }
+    });
+
+    app.view('send_email_modal', async ({ ack, body, view, client }) => {
+      await ack(); // Acknowledge the submission
+
+      const userEmail = view.state.values.email_input.email.value;
+      const userMessage = view.state.values.message_input.message.value;
+      const userId = body.user.id;
+
+      try {
+        // Send email using Nodemailer
+        await sendEmail(userEmail, userMessage);
+
+        // Notify the user in Slack
+        await client.chat.postMessage({
+          channel: userId,
+          text: `📧 Email successfully sent to ${userEmail}!`,
+        });
+      } catch (error) {
+        console.error('Error sending email:', error);
+
+        await client.chat.postMessage({
+          channel: userId,
+          text: `⚠️ Failed to send email. Please try again.`,
+        });
+      }
+    });
+
     app.command('/openmodal', async ({ command, ack, client }) => {
       await ack(); // ✅ Acknowledge the command
 
@@ -171,6 +218,43 @@ const app = new App({
       } catch (error) {
         console.error('Error opening modal:', error);
       }
+    });
+
+    // Handle "Open Modal" button click
+    app.action('open_modal', async ({ ack, body, client }) => {
+      await ack();
+
+      await client.views.open({
+        trigger_id: body.trigger_id,
+        view: {
+          type: 'modal',
+          callback_id: 'modal_submission',
+          title: { type: 'plain_text', text: 'My Modal' },
+          blocks: [
+            {
+              type: 'input',
+              block_id: 'user_input',
+              label: { type: 'plain_text', text: 'Enter something:' },
+              element: { type: 'plain_text_input', action_id: 'input_value' },
+            },
+          ],
+          submit: { type: 'plain_text', text: 'Submit' },
+        },
+      });
+    });
+
+    // 🔹 Handle Modal Submission
+    app.view('modal_submission', async ({ ack, body, view, client }) => {
+      await ack(); // Acknowledge the modal submission
+
+      const userInput = view.state.values.user_input.input_value.value;
+      const userId = body.user.id;
+
+      await client.chat.postMessage({
+        // channel: 'C08DMHC68N6',
+        channel: userId, // Send a DM to the user
+        text: `You submitted: "${userInput}"`,
+      });
     });
 
     // Listen for the "app_home_opened" event when users open your bot
@@ -223,43 +307,6 @@ const app = new App({
       });
     });
 
-    // Handle "Open Modal" button click
-    app.action('open_modal', async ({ ack, body, client }) => {
-      await ack();
-
-      await client.views.open({
-        trigger_id: body.trigger_id,
-        view: {
-          type: 'modal',
-          callback_id: 'modal_submission',
-          title: { type: 'plain_text', text: 'My Modal' },
-          blocks: [
-            {
-              type: 'input',
-              block_id: 'user_input',
-              label: { type: 'plain_text', text: 'Enter something:' },
-              element: { type: 'plain_text_input', action_id: 'input_value' },
-            },
-          ],
-          submit: { type: 'plain_text', text: 'Submit' },
-        },
-      });
-    });
-
-    // 🔹 Handle Modal Submission
-    app.view('modal_submission', async ({ ack, body, view, client }) => {
-      await ack(); // Acknowledge the modal submission
-
-      const userInput = view.state.values.user_input.input_value.value;
-      const userId = body.user.id;
-
-      await client.chat.postMessage({
-        channel: 'C08DMHC68N6',
-        // channel: userId, // Send a DM to the user
-        text: `You submitted: "${userInput}"`,
-      });
-    });
-
     // Scheduled Daily Quote
     cron.schedule('0 9 * * *', async () => {
       try {
@@ -284,3 +331,46 @@ const app = new App({
     process.exit(1);
   }
 })();
+
+//AI
+// const openai = new OpenAI({
+//   apiKey: openaiApiKey,
+// });
+
+// Function to interact with OpenAI API
+// async function getChatGPTResponse(userMessage) {
+//   try {
+//     const response = await openai.chat.completions.create({
+//       model: 'gpt-3.5-turbo',
+//       messages: [
+//         { role: 'system', content: 'You are a helpful assistant.' },
+//         { role: 'user', content: userMessage },
+//       ],
+//       temperature: 0.7,
+//       max_tokens: 100,
+//     });
+
+//     return response.choices[0].message.content;
+//   } catch (error) {
+//     console.error('Error with OpenAI API:', error);
+//     return "Sorry, I couldn't process that request.";
+//   }
+// }
+
+// async function getAIResponse(userMessage) {
+//   const chatCompletion = await client.chatCompletion({
+//     model: 'meta-llama/Llama-3.2-3B-Instruct',
+//     messages: [
+//       {
+//         role: 'user',
+//         content: userMessage,
+//       },
+//     ],
+//     provider: 'hf-inference',
+//     max_tokens: 100,
+//   });
+
+//   const reply = chatCompletion.choices[0].message;
+//   console.log(reply);
+//   return reply || "Sorry, I couldn't generate a response.";
+// }
