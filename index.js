@@ -4,6 +4,11 @@ const { App } = require('@slack/bolt');
 const cron = require('node-cron');
 // const { HfInference } = require('@huggingface/inference');
 const nodemailer = require('nodemailer');
+const { openModal } = require('./random/commands/openmodal');
+const { sendMail } = require('./mail/commands/sendmail');
+const { sendEmailModal } = require('./mail/views/sendEmailModal');
+const { modalSubmission } = require('./random/views/modalSubmission');
+const { openModalAction } = require('./random/actions/openModalAction');
 
 const port = process.env.PORT || 3000;
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
@@ -124,138 +129,15 @@ async function sendEmail(to, message) {
     });
 
     //mail
-    app.command('/sendmail', async ({ command, ack, client }) => {
-      await ack();
+    app.command('/sendmail', sendMail);
+    app.view('send_email_modal', sendEmailModal);
 
-      try {
-        await client.views.open({
-          trigger_id: command.trigger_id,
-          view: {
-            type: 'modal',
-            callback_id: 'send_email_modal',
-            title: { type: 'plain_text', text: 'Send an Email' },
-            blocks: [
-              {
-                type: 'input',
-                block_id: 'email_input',
-                label: { type: 'plain_text', text: 'Recipient Email' },
-                element: {
-                  type: 'plain_text_input',
-                  action_id: 'email',
-                  placeholder: { type: 'plain_text', text: 'Enter email' },
-                },
-              },
-              {
-                type: 'input',
-                block_id: 'message_input',
-                label: { type: 'plain_text', text: 'Message' },
-                element: {
-                  type: 'plain_text_input',
-                  action_id: 'message',
-                  multiline: true,
-                  placeholder: {
-                    type: 'plain_text',
-                    text: 'Enter your message',
-                  },
-                },
-              },
-            ],
-            submit: { type: 'plain_text', text: 'Send' },
-          },
-        });
-      } catch (error) {
-        console.error('Error opening email modal:', error);
-      }
-    });
-
-    app.view('send_email_modal', async ({ ack, body, view, client }) => {
-      await ack(); // Acknowledge the submission
-
-      const userEmail = view.state.values.email_input.email.value;
-      const userMessage = view.state.values.message_input.message.value;
-      const userId = body.user.id;
-
-      try {
-        // Send email using Nodemailer
-        await sendEmail(userEmail, userMessage);
-
-        // Notify the user in Slack
-        await client.chat.postMessage({
-          channel: userId,
-          text: `📧 Email successfully sent to ${userEmail}!`,
-        });
-      } catch (error) {
-        console.error('Error sending email:', error);
-
-        await client.chat.postMessage({
-          channel: userId,
-          text: `⚠️ Failed to send email. Please try again.`,
-        });
-      }
-    });
-
-    app.command('/openmodal', async ({ command, ack, client }) => {
-      await ack(); // ✅ Acknowledge the command
-
-      try {
-        await client.views.open({
-          trigger_id: command.trigger_id, // ✅ Correct trigger_id from the command
-          view: {
-            type: 'modal',
-            callback_id: 'modal_submission',
-            title: { type: 'plain_text', text: 'My Modal' },
-            blocks: [
-              {
-                type: 'input',
-                block_id: 'user_input',
-                label: { type: 'plain_text', text: 'Enter something:' },
-                element: { type: 'plain_text_input', action_id: 'input_value' },
-              },
-            ],
-            submit: { type: 'plain_text', text: 'Submit' },
-          },
-        });
-      } catch (error) {
-        console.error('Error opening modal:', error);
-      }
-    });
-
-    // Handle "Open Modal" button click
-    app.action('open_modal', async ({ ack, body, client }) => {
-      await ack();
-
-      await client.views.open({
-        trigger_id: body.trigger_id,
-        view: {
-          type: 'modal',
-          callback_id: 'modal_submission',
-          title: { type: 'plain_text', text: 'My Modal' },
-          blocks: [
-            {
-              type: 'input',
-              block_id: 'user_input',
-              label: { type: 'plain_text', text: 'Enter something:' },
-              element: { type: 'plain_text_input', action_id: 'input_value' },
-            },
-          ],
-          submit: { type: 'plain_text', text: 'Submit' },
-        },
-      });
-    });
+    //random commands
+    app.command('/openmodal', openModal);
+    app.action('open_modal', openModalAction);
 
     // 🔹 Handle Modal Submission
-    app.view('modal_submission', async ({ ack, body, view, client }) => {
-      await ack(); // Acknowledge the modal submission
-
-      const userInput = view.state.values.user_input.input_value.value;
-      const userId = body.user.id;
-
-      await client.chat.postMessage({
-        // channel: 'C08DMHC68N6',
-        channel: userId, // Send a DM to the user
-        text: `You submitted: "${userInput}"`,
-      });
-    });
+    app.view('modal_submission', modalSubmission);
 
     // Listen for the "app_home_opened" event when users open your bot
     app.event('app_home_opened', async ({ event, client }) => {
