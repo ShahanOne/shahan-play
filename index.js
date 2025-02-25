@@ -72,7 +72,7 @@ async function checkEmails() {
 
       // Send email to Slack
       await app.client.chat.postMessage({
-        channel: 'your-slack-channel-id',
+        channel: allChannelId,
         text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n${textBody}`,
       });
     }
