@@ -31,6 +31,8 @@ const app = new App({
   token: botToken,
 });
 
+//check
+
 // const openai = new OpenAI({
 //   apiKey: openaiApiKey,
 // });
