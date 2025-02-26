@@ -3,14 +3,13 @@ const { App } = require('@slack/bolt');
 const cron = require('node-cron');
 // const OpenAI = require('openai');
 // const { HfInference } = require('@huggingface/inference');
-const Imap = require('imap-simple');
-const { simpleParser } = require('mailparser');
 
 const { openModal } = require('./random/commands/openmodal');
 const { sendMail } = require('./mail/commands/sendmail');
 const { sendEmailModal } = require('./mail/views/sendEmailModal');
 const { modalSubmission } = require('./random/views/modalSubmission');
 const { openModalAction } = require('./random/actions/openModalAction');
+const { default: checkEmails } = require('./mail/functions/checkEmails');
 
 const port = process.env.PORT || 3000;
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
@@ -38,52 +37,6 @@ const app = new App({
   signingSecret,
   token: botToken,
 });
-
-//receiving mail
-const imapConfig = {
-  imap: {
-    user: process.env.EMAIL_USER,
-    password: process.env.EMAIL_PASS,
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    tls: true,
-    tlsOptions: { rejectUnauthorized: false },
-    authTimeout: 10000,
-  },
-};
-
-async function checkEmails() {
-  try {
-    const connection = await Imap.connect(imapConfig);
-    await connection.openBox('INBOX');
-
-    const searchCriteria = ['UNSEEN']; // Fetch unread emails
-    const fetchOptions = { bodies: ['HEADER', 'TEXT'], markSeen: true };
-
-    const messages = await connection.search(searchCriteria, fetchOptions);
-    for (const message of messages) {
-      const header = message.parts.find((part) => part.which === 'HEADER');
-      const body = message.parts.find((part) => part.which === 'TEXT');
-
-      const parsed = await simpleParser(body.body);
-      const subject = header.body.subject
-        ? header.body.subject[0]
-        : 'No Subject';
-      const sender = parsed.from?.text || 'Unknown sender';
-      const textBody = parsed.text || 'No body content';
-
-      // Send email to Slack
-      await app.client.chat.postMessage({
-        channel: allChannelId,
-        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n${textBody}`,
-      });
-    }
-
-    await connection.end();
-  } catch (error) {
-    console.error('Error fetching emails:', error);
-  }
-}
 
 // Check emails every minute
 setInterval(checkEmails, 60000);
