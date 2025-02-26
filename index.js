@@ -113,66 +113,26 @@ const checkEmails = async () => {
       const subject = parsed.subject || 'No Subject';
       const sender = parsed.from?.text || 'Unknown Sender';
       const textBody = parsed.text || 'No body content';
-
-      // Get message ID headers for threading
-      const messageId = parsed.messageId || '';
-      const references = parsed.references
-        ? Array.isArray(parsed.references)
-          ? parsed.references
-          : [parsed.references]
-        : [];
       const inReplyTo = parsed.inReplyTo || '';
 
       let mostRecentReply = 'No previous reply found';
 
-      if (inReplyTo || references.length > 0) {
-        // Search for the most recent reply using Message-ID or References
-        const threadCriteria = [
-          [
-            'OR',
-            ['HEADER', 'MESSAGE-ID', inReplyTo],
-            ['HEADER', 'REFERENCES', messageId],
-          ],
-        ];
+      // If this email is a reply, fetch only the email it directly responds to
+      if (inReplyTo) {
+        const replyCriteria = [['HEADER', 'MESSAGE-ID', inReplyTo]];
+        const replyMessages = await connection.search(
+          replyCriteria,
+          fetchOptions
+        );
 
-        // Fetch all messages from the inbox to search for replies
-        const allMessages = await connection.search(['ALL'], fetchOptions);
-
-        // Filter messages that are part of this thread
-        const threadMessages = allMessages.filter((msg) => {
-          const msgAll = msg.parts.find((part) => part.which === '');
-          if (!msgAll || !msgAll.body) return false;
-
-          return new Promise((resolve) => {
-            simpleParser(msgAll.body).then((parsedMsg) => {
-              const msgRefs = parsedMsg.references || [];
-              const msgInReplyTo = parsedMsg.inReplyTo || '';
-              const msgId = parsedMsg.messageId || '';
-
-              resolve(
-                msgInReplyTo === messageId ||
-                  msgRefs.includes(messageId) ||
-                  (inReplyTo && msgId === inReplyTo)
-              );
-            });
-          });
-        });
-
-        if (threadMessages.length > 0) {
-          // Sort by date to get most recent reply
-          const sortedThreads = await Promise.all(
-            threadMessages.map(async (msg) => {
-              const msgAll = msg.parts.find((part) => part.which === '');
-              const parsedMsg = await simpleParser(msgAll.body);
-              return {
-                date: parsedMsg.date || new Date(0),
-                content: parsedMsg.text || 'No content',
-              };
-            })
-          );
-
-          sortedThreads.sort((a, b) => b.date - a.date);
-          mostRecentReply = sortedThreads[0].content;
+        if (replyMessages.length > 0) {
+          // Since we're looking for a specific Message-ID, there should be at most one match
+          const replyMsg = replyMessages[0];
+          const replyAll = replyMsg.parts.find((part) => part.which === '');
+          if (replyAll && replyAll.body) {
+            const parsedReply = await simpleParser(replyAll.body);
+            mostRecentReply = parsedReply.text || 'No content in reply';
+          }
         }
       }
 
