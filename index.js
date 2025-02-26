@@ -4,6 +4,7 @@ const cron = require('node-cron');
 const Imap = require('imap-simple');
 const { simpleParser } = require('mailparser');
 const cheerio = require('cheerio');
+const quotedPrintable = require('quoted-printable');
 // const OpenAI = require('openai');
 // const { HfInference } = require('@huggingface/inference');
 
@@ -55,10 +56,11 @@ const imapConfig = {
   },
 };
 
-function cleanHtmlEmail(html) {
-  if (!html) return ''; // If there's no HTML, return empty string
-  const $ = cheerio.load(html);
-  return $.text().trim(); // Extracts and cleans plain text
+function cleanHtmlEmail(rawBody) {
+  let decodedText = quotedPrintable.decode(rawBody);
+  // return decodedText.replace(/--\S+/g, '').trim();
+  const $ = cheerio.load(decodedText);
+  return $('body').text().trim() || decodedText;
 }
 
 const checkEmails = async () => {
@@ -85,7 +87,8 @@ const checkEmails = async () => {
       console.log(parsed);
 
       // Clean email body
-      let textBody = cleanHtmlEmail(parsed.html) || 'No body content';
+      let textBody =
+        parsed.text || cleanHtmlEmail(parsed.html) || 'No body content';
 
       // Send email to Slack
       await app.client.chat.postMessage({

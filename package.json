@@ -19,6 +19,7 @@
     "mailparser": "^3.7.2",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.10.0",
-    "openai": "^4.85.2"
+    "openai": "^4.85.2",
+    "quoted-printable": "^1.0.1"
   }
 }
