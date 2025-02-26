@@ -56,41 +56,35 @@ const imapConfig = {
   },
 };
 
-function cleanHtmlEmail(rawBody) {
-  let decodedText = quotedPrintable.decode(rawBody);
-  // return decodedText.replace(/--\S+/g, '').trim();
-  const $ = cheerio.load(decodedText);
-  return $('body').text().trim() || decodedText;
-}
-
 const checkEmails = async () => {
   try {
     const connection = await Imap.connect(imapConfig);
     await connection.openBox('INBOX');
 
     const searchCriteria = ['UNSEEN']; // Fetch unread emails
-    const fetchOptions = { bodies: ['HEADER', 'TEXT'], markSeen: true };
+    const fetchOptions = { bodies: [''], markSeen: true }; // Fetch full raw email
 
     const messages = await connection.search(searchCriteria, fetchOptions);
     for (const message of messages) {
-      const header = message.parts.find((part) => part.which === 'HEADER');
-      const body = message.parts.find((part) => part.which === 'TEXT');
-
-      if (!body || !body.body) {
+      // Find the full email body (raw MIME content)
+      const all = message.parts.find((part) => part.which === '');
+      if (!all || !all.body) {
         console.warn('Skipping email: No body content found.');
         continue;
       }
 
-      const parsed = await simpleParser(body.body);
-      const subject = header?.body?.subject?.[0] || 'No Subject';
-      const sender = parsed.from?.text || 'Unknown sender';
-      console.log(parsed);
+      // Parse the raw email
+      const parsed = await simpleParser(all.body);
 
-      // Clean email body
-      let textBody =
-        parsed.text || cleanHtmlEmail(parsed.html) || 'No body content';
+      // Extract key fields
+      const subject = parsed.subject || 'No Subject';
+      const sender = parsed.from?.text || 'Unknown Sender';
+      const textBody = parsed.text || 'No body content'; // Use plain text
 
-      // Send email to Slack
+      // Log for debugging (optional)
+      // console.log('Parsed email:', { subject, sender, textBody });
+
+      // Send to Slack
       await app.client.chat.postMessage({
         channel: mailsChannel,
         text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n${textBody}`,
