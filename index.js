@@ -98,62 +98,93 @@ const checkEmails = async () => {
     const connection = await Imap.connect(imapConfig);
     await connection.openBox('INBOX');
 
-    const searchCriteria = ['UNSEEN']; // Fetch unread emails
-    const fetchOptions = { bodies: [''], markSeen: true }; // Fetch full raw email
+    const searchCriteria = ['UNSEEN'];
+    const fetchOptions = { bodies: [''], markSeen: true };
 
     const messages = await connection.search(searchCriteria, fetchOptions);
     for (const message of messages) {
-      // Find the full email body (raw MIME content)
       const all = message.parts.find((part) => part.which === '');
       if (!all || !all.body) {
         console.warn('Skipping email: No body content found.');
         continue;
       }
 
-      // Parse the raw email
       const parsed = await simpleParser(all.body);
-
-      // Extract key fields
       const subject = parsed.subject || 'No Subject';
       const sender = parsed.from?.text || 'Unknown Sender';
-      const textBody = parsed.text || 'No body content'; // Use plain text
+      const textBody = parsed.text || 'No body content';
 
-      // Extract thread information
-      const references = parsed.references || []; // Previous email chain
-      const inReplyTo = parsed.inReplyTo || ''; // Direct parent email
+      // Get message ID headers for threading
+      const messageId = parsed.messageId || '';
+      const references = parsed.references
+        ? Array.isArray(parsed.references)
+          ? parsed.references
+          : [parsed.references]
+        : [];
+      const inReplyTo = parsed.inReplyTo || '';
 
-      let previousReply = 'No previous reply found';
+      let mostRecentReply = 'No previous reply found';
 
-      if (references.length > 0 || inReplyTo) {
-        // Search for previous emails in the thread
+      if (inReplyTo || references.length > 0) {
+        // Search for the most recent reply using Message-ID or References
         const threadCriteria = [
-          'HEADER',
-          ['REFERENCES', references.join(' ')],
-          ['IN-REPLY-TO', inReplyTo],
+          [
+            'OR',
+            ['HEADER', 'MESSAGE-ID', inReplyTo],
+            ['HEADER', 'REFERENCES', messageId],
+          ],
         ];
-        const threadMessages = await connection.search(
-          threadCriteria,
-          fetchOptions
-        );
+
+        // Fetch all messages from the inbox to search for replies
+        const allMessages = await connection.search(['ALL'], fetchOptions);
+
+        // Filter messages that are part of this thread
+        const threadMessages = allMessages.filter((msg) => {
+          const msgAll = msg.parts.find((part) => part.which === '');
+          if (!msgAll || !msgAll.body) return false;
+
+          return new Promise((resolve) => {
+            simpleParser(msgAll.body).then((parsedMsg) => {
+              const msgRefs = parsedMsg.references || [];
+              const msgInReplyTo = parsedMsg.inReplyTo || '';
+              const msgId = parsedMsg.messageId || '';
+
+              resolve(
+                msgInReplyTo === messageId ||
+                  msgRefs.includes(messageId) ||
+                  (inReplyTo && msgId === inReplyTo)
+              );
+            });
+          });
+        });
 
         if (threadMessages.length > 0) {
-          // Get the most recent previous email
-          const latestThreadMessage = threadMessages[threadMessages.length - 1];
-          const threadAll = latestThreadMessage.parts.find(
-            (part) => part.which === ''
+          // Sort by date to get most recent reply
+          const sortedThreads = await Promise.all(
+            threadMessages.map(async (msg) => {
+              const msgAll = msg.parts.find((part) => part.which === '');
+              const parsedMsg = await simpleParser(msgAll.body);
+              return {
+                date: parsedMsg.date || new Date(0),
+                content: parsedMsg.text || 'No content',
+              };
+            })
           );
 
-          if (threadAll && threadAll.body) {
-            const threadParsed = await simpleParser(threadAll.body);
-            previousReply = threadParsed.text || 'No content in previous reply';
-          }
+          sortedThreads.sort((a, b) => b.date - a.date);
+          mostRecentReply = sortedThreads[0].content;
         }
       }
 
-      // Send new email + previous reply to Slack
+      // Send to Slack with better formatting
       await app.client.chat.postMessage({
         channel: mailsChannel,
-        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n${textBody} \n\n📩 *Previous Reply:* \n${previousReply}`,
+        text:
+          `📩 *New Email Received*\n` +
+          `*From:* ${sender}\n` +
+          `*Subject:* ${subject}\n` +
+          `*Message:*\n${textBody}\n\n` +
+          `📮 *Most Recent Reply:*\n${mostRecentReply}`,
       });
     }
 
@@ -162,6 +193,7 @@ const checkEmails = async () => {
     console.error('Error fetching emails:', error);
   }
 };
+
 // Check emails every minute
 setInterval(checkEmails, 60000);
 
