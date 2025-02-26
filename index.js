@@ -54,103 +54,91 @@ const imapConfig = {
   },
 };
 
-// const checkEmails = async () => {
-//   try {
-//     const connection = await Imap.connect(imapConfig);
-//     await connection.openBox('INBOX');
-
-//     const searchCriteria = ['UNSEEN']; // Fetch unread emails
-//     const fetchOptions = { bodies: [''], markSeen: true }; // Fetch full raw email
-
-//     const messages = await connection.search(searchCriteria, fetchOptions);
-//     for (const message of messages) {
-//       // Find the full email body (raw MIME content)
-//       const all = message.parts.find((part) => part.which === '');
-//       if (!all || !all.body) {
-//         console.warn('Skipping email: No body content found.');
-//         continue;
-//       }
-
-//       // Parse the raw email
-//       const parsed = await simpleParser(all.body);
-
-//       // Extract key fields
-//       const subject = parsed.subject || 'No Subject';
-//       const sender = parsed.from?.text || 'Unknown Sender';
-//       const textBody = parsed.text || 'No body content'; // Use plain text
-
-//       // console.log('Parsed email:', { subject, sender, textBody });
-
-//       // Send to Slack
-//       await app.client.chat.postMessage({
-//         channel: mailsChannel,
-//         text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n${textBody}`,
-//       });
-//     }
-
-//     await connection.end();
-//   } catch (error) {
-//     console.error('Error fetching emails:', error);
-//   }
-// };
 const checkEmails = async () => {
+  let connection;
   try {
-    const connection = await Imap.connect(imapConfig);
+    console.log('Checking emails...');
+    connection = await Imap.connect(imapConfig);
     await connection.openBox('INBOX');
 
     const searchCriteria = ['UNSEEN'];
-    const fetchOptions = { bodies: [''], markSeen: true };
+    const fetchOptions = { bodies: [''], markSeen: true, struct: true };
 
     const messages = await connection.search(searchCriteria, fetchOptions);
+    if (!messages.length) {
+      console.log('No new emails.');
+      await connection.end();
+      return;
+    }
+
     for (const message of messages) {
       const all = message.parts.find((part) => part.which === '');
       if (!all || !all.body) {
-        console.warn('Skipping email: No body content found.');
+        console.warn('Skipping email: No body content.');
         continue;
       }
 
       const parsed = await simpleParser(all.body);
       const subject = parsed.subject || 'No Subject';
       const sender = parsed.from?.text || 'Unknown Sender';
-      const textBody = parsed.text || 'No body content';
-      const inReplyTo = parsed.inReplyTo || '';
+      const textBody = parsed.text?.substring(0, 1000) || 'No body content';
+      const inReplyTo = parsed.inReplyTo || ''; // The Message-ID this email replies to
+      const messageId = parsed.messageId || message.attributes.uid; // Current email’s ID
 
-      let mostRecentReply = 'No previous reply found';
-
-      // If this email is a reply, fetch only the email it directly responds to
+      let previousReply = 'No previous reply found';
       if (inReplyTo) {
+        // Search for the exact email this one replies to
         const replyCriteria = [['HEADER', 'MESSAGE-ID', inReplyTo]];
-        const replyMessages = await connection.search(
-          replyCriteria,
-          fetchOptions
-        );
+        const replyFetchOptions = { bodies: [''], markSeen: false }; // Don’t mark reply as seen
+        let replyMessages;
 
-        if (replyMessages.length > 0) {
-          // Since we're looking for a specific Message-ID, there should be at most one match
-          const replyMsg = replyMessages[0];
+        // Try INBOX first
+        try {
+          replyMessages = await connection.search(
+            replyCriteria,
+            replyFetchOptions
+          );
+        } catch (err) {
+          console.warn(`Reply not found in INBOX for ${inReplyTo}:`, err);
+        }
+
+        // If not found in INBOX, try all mail (e.g., Sent or All Mail)
+        if (!replyMessages || !replyMessages.length) {
+          try {
+            await connection.openBox('[Gmail]/All Mail', true); // Adjust for your provider
+            replyMessages = await connection.search(
+              replyCriteria,
+              replyFetchOptions
+            );
+            await connection.openBox('INBOX'); // Switch back
+          } catch (err) {
+            console.warn(`Reply not found in All Mail either:`, err);
+          }
+        }
+
+        if (replyMessages && replyMessages.length > 0) {
+          const replyMsg = replyMessages[0]; // Should be one match for a specific Message-ID
           const replyAll = replyMsg.parts.find((part) => part.which === '');
-          if (replyAll && replyAll.body) {
+          if (replyAll?.body) {
             const parsedReply = await simpleParser(replyAll.body);
-            mostRecentReply = parsedReply.text || 'No content in reply';
+            previousReply =
+              parsedReply.text?.substring(0, 500) || 'Empty reply';
           }
         }
       }
 
-      // Send to Slack with better formatting
+      // Post to Slack with just the new email and its direct reply
       await app.client.chat.postMessage({
         channel: mailsChannel,
-        text:
-          `📩 *New Email Received*\n` +
-          `*From:* ${sender}\n` +
-          `*Subject:* ${subject}\n` +
-          `*Message:*\n${textBody}\n\n` +
-          `📮 *Most Recent Reply:*\n${mostRecentReply}`,
+        text: `*📩 New Email*\n*From:* ${sender}\n*Subject:* ${subject}\n*Message:* ${textBody}\n\n*In Reply To:* ${previousReply}`,
       });
     }
 
     await connection.end();
   } catch (error) {
-    console.error('Error fetching emails:', error);
+    console.error('Email check failed:', error);
+  } finally {
+    if (connection) await connection.end();
   }
 };
 
@@ -196,7 +184,7 @@ setInterval(checkEmails, 60000);
           text.includes('amaze me')
         ) {
           const response = await fetch(
-            `https://api.unsplash.com/photos/random?query=amazing&client_id=${unsplashAccessKey}`
+            `https://api.unsplash.com/photos/random?query=wallpaper&client_id=${unsplashAccessKey}`
           );
           const data = await response.json();
 
