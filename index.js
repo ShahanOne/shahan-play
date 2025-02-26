@@ -9,7 +9,7 @@ const { sendMail } = require('./mail/commands/sendmail');
 const { sendEmailModal } = require('./mail/views/sendEmailModal');
 const { modalSubmission } = require('./random/views/modalSubmission');
 const { openModalAction } = require('./random/actions/openModalAction');
-const { default: checkEmails } = require('./mail/functions/checkEmails');
+const { checkEmails } = require('./mail/functions/checkEmails');
 
 const port = process.env.PORT || 3000;
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
