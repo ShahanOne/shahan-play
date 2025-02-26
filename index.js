@@ -3,8 +3,6 @@ const { App } = require('@slack/bolt');
 const cron = require('node-cron');
 const Imap = require('imap-simple');
 const { simpleParser } = require('mailparser');
-const cheerio = require('cheerio');
-const quotedPrintable = require('quoted-printable');
 // const OpenAI = require('openai');
 // const { HfInference } = require('@huggingface/inference');
 
@@ -56,6 +54,45 @@ const imapConfig = {
   },
 };
 
+// const checkEmails = async () => {
+//   try {
+//     const connection = await Imap.connect(imapConfig);
+//     await connection.openBox('INBOX');
+
+//     const searchCriteria = ['UNSEEN']; // Fetch unread emails
+//     const fetchOptions = { bodies: [''], markSeen: true }; // Fetch full raw email
+
+//     const messages = await connection.search(searchCriteria, fetchOptions);
+//     for (const message of messages) {
+//       // Find the full email body (raw MIME content)
+//       const all = message.parts.find((part) => part.which === '');
+//       if (!all || !all.body) {
+//         console.warn('Skipping email: No body content found.');
+//         continue;
+//       }
+
+//       // Parse the raw email
+//       const parsed = await simpleParser(all.body);
+
+//       // Extract key fields
+//       const subject = parsed.subject || 'No Subject';
+//       const sender = parsed.from?.text || 'Unknown Sender';
+//       const textBody = parsed.text || 'No body content'; // Use plain text
+
+//       // console.log('Parsed email:', { subject, sender, textBody });
+
+//       // Send to Slack
+//       await app.client.chat.postMessage({
+//         channel: mailsChannel,
+//         text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n${textBody}`,
+//       });
+//     }
+
+//     await connection.end();
+//   } catch (error) {
+//     console.error('Error fetching emails:', error);
+//   }
+// };
 const checkEmails = async () => {
   try {
     const connection = await Imap.connect(imapConfig);
@@ -81,13 +118,42 @@ const checkEmails = async () => {
       const sender = parsed.from?.text || 'Unknown Sender';
       const textBody = parsed.text || 'No body content'; // Use plain text
 
-      // Log for debugging (optional)
-      // console.log('Parsed email:', { subject, sender, textBody });
+      // Extract thread information
+      const references = parsed.references || []; // Previous email chain
+      const inReplyTo = parsed.inReplyTo || ''; // Direct parent email
 
-      // Send to Slack
+      let previousReply = 'No previous reply found';
+
+      if (references.length > 0 || inReplyTo) {
+        // Search for previous emails in the thread
+        const threadCriteria = [
+          'HEADER',
+          ['REFERENCES', references.join(' ')],
+          ['IN-REPLY-TO', inReplyTo],
+        ];
+        const threadMessages = await connection.search(
+          threadCriteria,
+          fetchOptions
+        );
+
+        if (threadMessages.length > 0) {
+          // Get the most recent previous email
+          const latestThreadMessage = threadMessages[threadMessages.length - 1];
+          const threadAll = latestThreadMessage.parts.find(
+            (part) => part.which === ''
+          );
+
+          if (threadAll && threadAll.body) {
+            const threadParsed = await simpleParser(threadAll.body);
+            previousReply = threadParsed.text || 'No content in previous reply';
+          }
+        }
+      }
+
+      // Send new email + previous reply to Slack
       await app.client.chat.postMessage({
         channel: mailsChannel,
-        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n${textBody}`,
+        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n${textBody} \n\n📩 *Previous Reply:* \n${previousReply}`,
       });
     }
 
@@ -96,7 +162,6 @@ const checkEmails = async () => {
     console.error('Error fetching emails:', error);
   }
 };
-
 // Check emails every minute
 setInterval(checkEmails, 60000);
 
