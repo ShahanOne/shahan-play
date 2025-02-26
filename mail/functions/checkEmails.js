@@ -60,4 +60,4 @@ const checkEmails = async () => {
   }
 };
 
-export default checkEmails;
+module.exports = { checkEmails };
