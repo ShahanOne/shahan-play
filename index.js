@@ -82,10 +82,10 @@ const checkEmails = async () => {
       const parsed = await simpleParser(body.body);
       const subject = header?.body?.subject?.[0] || 'No Subject';
       const sender = parsed.from?.text || 'Unknown sender';
+      console.log(parsed);
 
       // Clean email body
-      let textBody =
-        parsed.text || cleanHtmlEmail(parsed.html) || 'No body content';
+      let textBody = cleanHtmlEmail(parsed.html) || 'No body content';
 
       // Send email to Slack
       await app.client.chat.postMessage({
