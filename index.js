@@ -53,7 +53,6 @@ const imapConfig = {
     authTimeout: 10000,
   },
 };
-
 const checkEmails = async () => {
   let connection;
   try {
@@ -81,18 +80,15 @@ const checkEmails = async () => {
       const parsed = await simpleParser(all.body);
       const subject = parsed.subject || 'No Subject';
       const sender = parsed.from?.text || 'Unknown Sender';
-      const textBody = parsed.text?.substring(0, 1000) || 'No body content';
-      const inReplyTo = parsed.inReplyTo || ''; // The Message-ID this email replies to
-      const messageId = parsed.messageId || message.attributes.uid; // Current email’s ID
+      const textBody = (parsed.text || 'No body content').substring(0, 1500); // Cap at 1500 chars
+      const inReplyTo = parsed.inReplyTo || '';
 
       let previousReply = 'No previous reply found';
       if (inReplyTo) {
-        // Search for the exact email this one replies to
         const replyCriteria = [['HEADER', 'MESSAGE-ID', inReplyTo]];
-        const replyFetchOptions = { bodies: [''], markSeen: false }; // Don’t mark reply as seen
+        const replyFetchOptions = { bodies: [''], markSeen: false };
         let replyMessages;
 
-        // Try INBOX first
         try {
           replyMessages = await connection.search(
             replyCriteria,
@@ -102,7 +98,6 @@ const checkEmails = async () => {
           console.warn(`Reply not found in INBOX for ${inReplyTo}:`, err);
         }
 
-        // If not found in INBOX, try all mail (e.g., Sent or All Mail)
         if (!replyMessages || !replyMessages.length) {
           try {
             await connection.openBox('[Gmail]/All Mail', true); // Adjust for your provider
@@ -110,40 +105,132 @@ const checkEmails = async () => {
               replyCriteria,
               replyFetchOptions
             );
-            await connection.openBox('INBOX'); // Switch back
+            await connection.openBox('INBOX');
           } catch (err) {
-            console.warn(`Reply not found in All Mail either:`, err);
+            console.warn(`Reply not found in All Mail:`, err);
           }
         }
 
         if (replyMessages && replyMessages.length > 0) {
-          const replyMsg = replyMessages[0]; // Should be one match for a specific Message-ID
+          const replyMsg = replyMessages[0];
           const replyAll = replyMsg.parts.find((part) => part.which === '');
           if (replyAll?.body) {
             const parsedReply = await simpleParser(replyAll.body);
-            previousReply =
-              parsedReply.text?.substring(0, 500) || 'Empty reply';
+            previousReply = (parsedReply.text || 'Empty reply').substring(
+              0,
+              1000
+            ); // Cap at 1000 chars
           }
         }
       }
 
-      // Post to Slack with just the new email and its direct reply
-      await app.client.chat.postMessage({
-        channel: mailsChannel,
-        text: `*📩 New Email*\n*From:* ${sender}\n*Subject:* ${subject}\n*Message:* ${textBody}\n\n*In Reply To:* ${previousReply}`,
-      });
+      // Build Slack message, enforce total length under 4000 chars
+      const slackText = `*New Email*\n*From:* ${sender}\n*Subject:* ${subject}\n*Message:* ${textBody}\n\n*In Reply To:* ${previousReply}`;
+      const truncatedText =
+        slackText.substring(0, 3900) + (slackText.length > 3900 ? '...' : '');
+
+      console.log(`Posting to Slack: ${truncatedText.length} chars`); // Debug payload size
+
+      try {
+        await app.client.chat.postMessage({
+          channel: mailsChannel,
+          text: truncatedText,
+        });
+      } catch (slackError) {
+        console.error('Slack API error:', slackError);
+        throw slackError; // Bubble up for outer catch
+      }
     }
 
     await connection.end();
   } catch (error) {
     console.error('Email check failed:', error);
+    // Log specific Slack error details if available
+    if (error.statusCode === 500) {
+      console.error(
+        'Slack returned 500 - possible bad payload or server issue.'
+      );
+    }
   } finally {
     if (connection) await connection.end();
   }
 };
 
-// Check emails every minute
-setInterval(checkEmails, 60000);
+// Poll with overlap protection
+let isRunning = false;
+setInterval(async () => {
+  if (isRunning) return;
+  isRunning = true;
+  try {
+    await checkEmails();
+  } finally {
+    isRunning = false;
+  }
+}, 60000);
+
+// const checkEmails = async () => {
+//   try {
+//     const connection = await Imap.connect(imapConfig);
+//     await connection.openBox('INBOX');
+
+//     const searchCriteria = ['UNSEEN'];
+//     const fetchOptions = { bodies: [''], markSeen: true };
+
+//     const messages = await connection.search(searchCriteria, fetchOptions);
+//     for (const message of messages) {
+//       const all = message.parts.find((part) => part.which === '');
+//       if (!all || !all.body) {
+//         console.warn('Skipping email: No body content found.');
+//         continue;
+//       }
+
+//       const parsed = await simpleParser(all.body);
+//       const subject = parsed.subject || 'No Subject';
+//       const sender = parsed.from?.text || 'Unknown Sender';
+//       const textBody = parsed.text || 'No body content';
+//       const inReplyTo = parsed.inReplyTo || '';
+
+//       let mostRecentReply = 'No previous reply found';
+
+//       // If this email is a reply, fetch only the email it directly responds to
+//       if (inReplyTo) {
+//         const replyCriteria = [['HEADER', 'MESSAGE-ID', inReplyTo]];
+//         const replyMessages = await connection.search(
+//           replyCriteria,
+//           fetchOptions
+//         );
+
+//         if (replyMessages.length > 0) {
+//           // Since we're looking for a specific Message-ID, there should be at most one match
+//           const replyMsg = replyMessages[0];
+//           const replyAll = replyMsg.parts.find((part) => part.which === '');
+//           if (replyAll && replyAll.body) {
+//             const parsedReply = await simpleParser(replyAll.body);
+//             mostRecentReply = parsedReply.text || 'No content in reply';
+//           }
+//         }
+//       }
+
+//       // Send to Slack with better formatting
+//       await app.client.chat.postMessage({
+//         channel: mailsChannel,
+//         text:
+//           ` *New Email Received*\n` +
+//           `*From:* ${sender}\n` +
+//           `*Subject:* ${subject}\n` +
+//           `*Message:*\n${textBody}\n\n` +
+//           `📮 *Most Recent Reply:*\n${mostRecentReply}`,
+//       });
+//     }
+
+//     await connection.end();
+//   } catch (error) {
+//     console.error('Error fetching emails:', error);
+//   }
+// };
+
+// // Check emails every minute
+// setInterval(checkEmails, 60000);
 
 (async () => {
   try {
