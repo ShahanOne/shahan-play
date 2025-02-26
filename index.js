@@ -55,10 +55,11 @@ const imapConfig = {
   },
 };
 
-const cleanHtmlEmail = (html) => {
+function cleanHtmlEmail(html) {
+  if (!html) return ''; // If there's no HTML, return empty string
   const $ = cheerio.load(html);
-  return $('body').text().trim() || html;
-};
+  return $.text().trim(); // Extracts and cleans plain text
+}
 
 const checkEmails = async () => {
   try {
