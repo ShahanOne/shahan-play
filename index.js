@@ -78,6 +78,8 @@ const checkEmails = async () => {
       const sender = parsed.from?.text || 'Unknown Sender';
       const textBody = parsed.text || 'No body content';
 
+      console.log(textBody);
+
       // Extract only the latest reply
       const latestReply = extractLatestReply(textBody);
 
