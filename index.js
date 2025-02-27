@@ -80,7 +80,11 @@ const checkEmails = async () => {
       const parsed = await simpleParser(all.body);
       const subject = parsed.subject || 'No Subject';
       const sender = parsed.from?.text || 'Unknown Sender';
-      const textBody = (parsed.text || 'No body content').substring(0, 1500); // Cap at 1500 chars
+      // Extract only the new content, stripping quoted replies
+      const textBody = (parsed.textAsHtml || parsed.text || 'No body content')
+        .split(/On .+ wrote:/)[0] // Split at first "On ... wrote:" and take new part
+        .trim()
+        .substring(0, 1500);
       const inReplyTo = parsed.inReplyTo || '';
 
       let previousReply = 'No previous reply found';
@@ -100,7 +104,7 @@ const checkEmails = async () => {
 
         if (!replyMessages || !replyMessages.length) {
           try {
-            await connection.openBox('[Gmail]/All Mail', true); // Adjust for your provider
+            await connection.openBox('[Gmail]/All Mail', true); // Gmail-specific, adjust if needed
             replyMessages = await connection.search(
               replyCriteria,
               replyFetchOptions
@@ -116,41 +120,34 @@ const checkEmails = async () => {
           const replyAll = replyMsg.parts.find((part) => part.which === '');
           if (replyAll?.body) {
             const parsedReply = await simpleParser(replyAll.body);
-            previousReply = (parsedReply.text || 'Empty reply').substring(
-              0,
-              1000
-            ); // Cap at 1000 chars
+            const replySender = parsedReply.from?.text || 'Unknown Sender';
+            const replyDate =
+              parsedReply.date?.toLocaleString() || 'Unknown Date';
+            // Strip quotes from reply too, take only the original content
+            previousReply = (parsedReply.text || 'Empty reply')
+              .split(/On .+ wrote:/)[0]
+              .trim()
+              .substring(0, 1000);
+            previousReply = `On ${replyDate} ${replySender} wrote:\n${previousReply}`;
           }
         }
       }
 
-      // Build Slack message, enforce total length under 4000 chars
       const slackText = `*New Email*\n*From:* ${sender}\n*Subject:* ${subject}\n*Message:* ${textBody}\n\n*In Reply To:* ${previousReply}`;
       const truncatedText =
         slackText.substring(0, 3900) + (slackText.length > 3900 ? '...' : '');
 
-      console.log(`Posting to Slack: ${truncatedText.length} chars`); // Debug payload size
+      console.log(`Posting to Slack: ${truncatedText.length} chars`);
 
-      try {
-        await app.client.chat.postMessage({
-          channel: mailsChannel,
-          text: truncatedText,
-        });
-      } catch (slackError) {
-        console.error('Slack API error:', slackError);
-        throw slackError; // Bubble up for outer catch
-      }
+      await app.client.chat.postMessage({
+        channel: mailsChannel,
+        text: truncatedText,
+      });
     }
 
     await connection.end();
   } catch (error) {
     console.error('Email check failed:', error);
-    // Log specific Slack error details if available
-    if (error.statusCode === 500) {
-      console.error(
-        'Slack returned 500 - possible bad payload or server issue.'
-      );
-    }
   } finally {
     if (connection) await connection.end();
   }
