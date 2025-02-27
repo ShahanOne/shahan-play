@@ -53,10 +53,12 @@ const imapConfig = {
     authTimeout: 10000,
   },
 };
-const extractLatestReply = (emailBody) => {
-  // Split by "On <date> <time> <sender> wrote:" pattern
+const extractLatestAndPreviousReply = (emailBody) => {
   const splitBody = emailBody.split(/\nOn .*? wrote:/);
-  return splitBody[0].trim(); // Get only the latest reply
+  const latestReply = splitBody[0]?.trim() || 'No recent message';
+  const previousReply = splitBody[1]?.trim() || 'No previous message';
+
+  return { latestReply, previousReply };
 };
 
 const checkEmails = async () => {
@@ -78,14 +80,13 @@ const checkEmails = async () => {
       const sender = parsed.from?.text || 'Unknown Sender';
       const textBody = parsed.text || 'No body content';
 
-      console.log(textBody);
-
-      // Extract only the latest reply
-      const latestReply = extractLatestReply(textBody);
+      // Extract latest and previous replies
+      const { latestReply, previousReply } =
+        extractLatestAndPreviousReply(textBody);
 
       await app.client.chat.postMessage({
         channel: mailsChannel,
-        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n${latestReply}`,
+        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n📨 *Message:* \n${latestReply} \n\n📩 *In Reply To:* \n${previousReply}`,
       });
     }
 
