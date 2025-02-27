@@ -53,106 +53,43 @@ const imapConfig = {
     authTimeout: 10000,
   },
 };
+const extractLatestReply = (emailBody) => {
+  // Split by "On <date> <time> <sender> wrote:" pattern
+  const splitBody = emailBody.split(/\nOn .*? wrote:/);
+  return splitBody[0].trim(); // Get only the latest reply
+};
+
 const checkEmails = async () => {
-  let connection;
   try {
-    console.log('Checking emails...');
-    connection = await Imap.connect(imapConfig);
+    const connection = await Imap.connect(imapConfig);
     await connection.openBox('INBOX');
 
     const searchCriteria = ['UNSEEN'];
-    const fetchOptions = { bodies: [''], markSeen: true, struct: true };
+    const fetchOptions = { bodies: [''], markSeen: true };
 
     const messages = await connection.search(searchCriteria, fetchOptions);
-    if (!messages.length) {
-      console.log('No new emails.');
-      await connection.end();
-      return;
-    }
-
     for (const message of messages) {
       const all = message.parts.find((part) => part.which === '');
-      if (!all || !all.body) {
-        console.warn('Skipping email: No body content.');
-        continue;
-      }
+      if (!all || !all.body) continue;
 
       const parsed = await simpleParser(all.body);
+
       const subject = parsed.subject || 'No Subject';
       const sender = parsed.from?.text || 'Unknown Sender';
-      const textBody = (parsed.text || 'No body content').substring(0, 1500); // Cap at 1500 chars
-      const inReplyTo = parsed.inReplyTo || '';
+      const textBody = parsed.text || 'No body content';
 
-      let previousReply = 'No previous reply found';
-      if (inReplyTo) {
-        const replyCriteria = [['HEADER', 'MESSAGE-ID', inReplyTo]];
-        const replyFetchOptions = { bodies: [''], markSeen: false };
-        let replyMessages;
+      // Extract only the latest reply
+      const latestReply = extractLatestReply(textBody);
 
-        try {
-          replyMessages = await connection.search(
-            replyCriteria,
-            replyFetchOptions
-          );
-        } catch (err) {
-          console.warn(`Reply not found in INBOX for ${inReplyTo}:`, err);
-        }
-
-        if (!replyMessages || !replyMessages.length) {
-          try {
-            await connection.openBox('[Gmail]/All Mail', true); // Adjust for your provider
-            replyMessages = await connection.search(
-              replyCriteria,
-              replyFetchOptions
-            );
-            await connection.openBox('INBOX');
-          } catch (err) {
-            console.warn(`Reply not found in All Mail:`, err);
-          }
-        }
-
-        if (replyMessages && replyMessages.length > 0) {
-          const replyMsg = replyMessages[0];
-          const replyAll = replyMsg.parts.find((part) => part.which === '');
-          if (replyAll?.body) {
-            const parsedReply = await simpleParser(replyAll.body);
-            previousReply = (parsedReply.text || 'Empty reply').substring(
-              0,
-              1000
-            ); // Cap at 1000 chars
-          }
-        }
-      }
-
-      // Build Slack message, enforce total length under 4000 chars
-      const slackText = `*New Email*\n*From:* ${sender}\n*Subject:* ${subject}\n*Message:* ${textBody}\n\n*In Reply To:* ${previousReply}`;
-      const truncatedText =
-        slackText.substring(0, 3900) + (slackText.length > 3900 ? '...' : '');
-
-      console.log(`Posting to Slack: ${truncatedText.length} chars`); // Debug payload size
-
-      try {
-        await app.client.chat.postMessage({
-          channel: mailsChannel,
-          text: truncatedText,
-        });
-      } catch (slackError) {
-        console.error('Slack API error:', slackError);
-        throw slackError; // Bubble up for outer catch
-      }
+      await app.client.chat.postMessage({
+        channel: mailsChannel,
+        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n${latestReply}`,
+      });
     }
 
     await connection.end();
   } catch (error) {
-    console.error('Email check failed:', error);
-    // Log specific Slack error details if available
-    if (error.statusCode === 500) {
-      console.error(
-        'Slack returned 500 - possible bad payload or server issue.'
-      );
-    }
-  } finally {
-    if (connection) await connection.end();
+    console.error('Error fetching emails:', error);
   }
 };
 
