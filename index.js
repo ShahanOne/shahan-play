@@ -53,13 +53,26 @@ const imapConfig = {
     authTimeout: 10000,
   },
 };
-const extractLatestAndPreviousReply = (emailBody) => {
-  const splitBody = emailBody.split(/\nOn .*? wrote:/);
-  const latestReply = splitBody[0]?.trim() || 'No recent message';
-  const previousReply = splitBody[1]?.trim() || 'No previous message';
+// const extractLatestAndPreviousReply = (emailBody) => {
+//   const splitBody = emailBody.split(/\nOn .*? wrote:/);
+//   const latestReply = splitBody[0]?.trim() || 'No recent message';
+//   const previousReply = splitBody[1]?.trim() || 'No previous message';
+
+//   return { latestReply, previousReply };
+// };
+
+function extractLatestAndPreviousReply(textBody) {
+  // Remove quoted email content
+  const cleanedText = textBody.replace(/On.*\d{4}.*wrote:/s, '').trim();
+
+  // Extract latest reply (first part before any "In Reply To:")
+  const parts = cleanedText.split('\n\n');
+  const latestReply = parts[0].trim();
+  const previousReply =
+    parts.slice(1).join('\n\n').trim() || 'No previous reply';
 
   return { latestReply, previousReply };
-};
+}
 
 const checkEmails = async () => {
   try {
@@ -87,12 +100,9 @@ const checkEmails = async () => {
       const { latestReply, previousReply } =
         extractLatestAndPreviousReply(textBody);
 
-      const cleanedReply = previousReply.split('\nOn')[0].trim();
-
-      console.log(cleanedReply);
       await app.client.chat.postMessage({
         channel: mailsChannel,
-        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n📨 *Message:* \n${latestReply} \n\n📩 *In Reply To:* \n${cleanedReply}`,
+        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n📨 *Message:* \n${latestReply} \n\n📩 *In Reply To:* \n${previousReply}`,
       });
     }
 
