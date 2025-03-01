@@ -66,7 +66,10 @@ const checkEmails = async () => {
     const connection = await Imap.connect(imapConfig);
     await connection.openBox('INBOX');
 
-    const searchCriteria = ['UNSEEN'];
+    const searchCriteria = [
+      'UNSEEN',
+      ['X-GM-RAW', '-in:Social -in:Promotions -in:Spam'],
+    ];
     const fetchOptions = { bodies: [''], markSeen: true };
 
     const messages = await connection.search(searchCriteria, fetchOptions);
@@ -83,10 +86,13 @@ const checkEmails = async () => {
       // Extract latest and previous replies
       const { latestReply, previousReply } =
         extractLatestAndPreviousReply(textBody);
+      console.log(previousReply);
 
       await app.client.chat.postMessage({
         channel: mailsChannel,
-        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n📨 *Message:* \n${latestReply} \n\n📩 *In Reply To:* \n${previousReply}`,
+        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n \n${latestReply} \n *In Reply To:* \n${previousReply
+          .split(/On .+ wrote:/)[0]
+          .trim()}`,
       });
     }
 
