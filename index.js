@@ -86,13 +86,13 @@ const checkEmails = async () => {
       // Extract latest and previous replies
       const { latestReply, previousReply } =
         extractLatestAndPreviousReply(textBody);
-      console.log(previousReply);
 
+      const cleanedReply = previousReply.split('\nOn')[0].trim();
+
+      console.log(cleanedReply);
       await app.client.chat.postMessage({
         channel: mailsChannel,
-        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n \n${latestReply} \n *In Reply To:* \n${previousReply
-          .split(/On .+ wrote:/)[0]
-          .trim()}`,
+        text: `📩 *New Email Received* \n*From:* ${sender} \n*Subject:* ${subject} \n\n📨 *Message:* \n${latestReply} \n\n📩 *In Reply To:* \n${cleanedReply}`,
       });
     }
 
