@@ -60,20 +60,31 @@ const imapConfig = {
 
 //   return { latestReply, previousReply };
 // };
+const extractLatestAndPreviousReply = (emailBody) => {
+  // Split the email body at the reply boundary (e.g., "On ... wrote:")
+  const replyBoundaryRegex = /\nOn .*? wrote:/i;
+  const splitBody = emailBody.split(replyBoundaryRegex);
 
-function extractLatestAndPreviousReply(textBody) {
-  // Remove quoted email content
-  const cleanedText = textBody.replace(/On.*\d{4}.*wrote:/s, '').trim();
+  // Latest reply is the first part (before the "On ... wrote:")
+  const latestReply = splitBody[0]?.trim() || 'No recent message';
 
-  // Extract latest reply (first part before any "In Reply To:")
-  const parts = cleanedText.split('\n\n');
-  const latestReply = parts[0].trim();
-  const previousReply =
-    parts.slice(1).join('\n\n').trim() || 'No previous reply';
+  // Previous reply is the second part (after "On ... wrote:"), cleaned up
+  let previousReply = splitBody[1]?.trim() || 'No previous message';
+
+  // Remove any lines that look like email signatures or metadata (e.g., timestamps, email addresses)
+  previousReply = previousReply
+    .split('\n')
+    .filter(
+      (line) =>
+        !line.match(/^[>|\s]*On .*? wrote:/i) &&
+        !line.match(/^\s*<\w+@\w+\.\w+>/) &&
+        !line.match(/^\s*at\s+\d+:/)
+    )
+    .join('\n')
+    .trim();
 
   return { latestReply, previousReply };
-}
-
+};
 const checkEmails = async () => {
   try {
     const connection = await Imap.connect(imapConfig);
