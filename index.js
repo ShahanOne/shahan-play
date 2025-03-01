@@ -65,23 +65,27 @@ const extractLatestAndPreviousReply = (emailBody) => {
   const replyBoundaryRegex = /\nOn .*? wrote:/i;
   const splitBody = emailBody.split(replyBoundaryRegex);
 
-  // Latest reply is the first part (before the "On ... wrote:")
+  // Latest reply is the first part (before the first "On ... wrote:")
   const latestReply = splitBody[0]?.trim() || 'No recent message';
 
-  // Previous reply is the second part (after "On ... wrote:"), cleaned up
+  // Previous reply is the second part (the most recent reply before the latest)
   let previousReply = splitBody[1]?.trim() || 'No previous message';
 
-  // Remove any lines that look like email signatures or metadata (e.g., timestamps, email addresses)
-  previousReply = previousReply
-    .split('\n')
-    .filter(
-      (line) =>
-        !line.match(/^[>|\s]*On .*? wrote:/i) &&
-        !line.match(/^\s*<\w+@\w+\.\w+>/) &&
-        !line.match(/^\s*at\s+\d+:/)
-    )
-    .join('\n')
-    .trim();
+  // Clean up the previous reply by removing nested replies and metadata
+  if (previousReply !== 'No previous message') {
+    // Split lines and filter out metadata and nested reply indicators
+    const lines = previousReply.split('\n').map((line) => line.trim());
+    previousReply = lines
+      .filter(
+        (line) =>
+          !line.match(/^[>|\s]*On .*? wrote:/i) && // Remove nested "On ... wrote:" lines
+          !line.match(/^\s*<\w+@\w+\.\w+>/) && // Remove email addresses
+          !line.match(/^\s*at\s+\d+:/) && // Remove timestamp fragments
+          line.length > 0 // Remove empty lines
+      )
+      .join('\n')
+      .trim();
+  }
 
   return { latestReply, previousReply };
 };
